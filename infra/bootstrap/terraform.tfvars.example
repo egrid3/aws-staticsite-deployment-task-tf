@@ -1,0 +1,2 @@
+state_bucket_name = "static-site-tf-state-bucket"
+lock_table_name   = "terraform-locks"

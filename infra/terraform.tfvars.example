@@ -1,0 +1,4 @@
+stack_name            = "static-site"
+github_repo_full_name = "pchinjr/static-site-deployment-task"
+tf_state_bucket_name  = "static-site-tf-state-bucket"
+tf_lock_table_name    = "terraform-locks"

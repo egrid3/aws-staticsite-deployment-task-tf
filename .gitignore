@@ -1,0 +1,19 @@
+# Terraform (state, caches, and local-only inputs)
+**/.terraform/
+**/.terraform.lock.hcl
+**/terraform.tfstate
+**/terraform.tfstate.backup
+**/terraform.tfstate.d/
+**/terraform.tfvars
+**/terraform.tfvars.json
+**/backend.hcl
+**/*.tfplan
+crash.log
+crash.*.log
+
+# OS
+.DS_Store
+
+# Build artifacts
+aws/dist/
+aws
