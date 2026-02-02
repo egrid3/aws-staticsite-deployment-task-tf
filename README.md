@@ -39,97 +39,81 @@ To replace placeholders with local images:
 1. Create `assets/images/` and add images (e.g., `leaving-las-vegas.jpg`).
 2. Update `data/films.json` to point to `/assets/images/leaving-las-vegas.jpg` instead of the picsum URL.
 
-## Deploying to AWS S3 (public URL)
+## Deploying to AWS S3 (public bucket) with Terraform + GitHub Actions
 
-These steps publish the static site to an S3 bucket and make it available at a public URL. This guide uses the AWS CLI (`aws`). Make sure you have an AWS account and the AWS CLI installed and configured (`aws configure`).
+This repo includes Terraform for AWS infrastructure and a GitHub Actions workflow for CI/CD. The setup is fully IaC (no clickops) and uses GitHub OIDC instead of long‑lived AWS keys.
 
 Important notes before you begin:
-- Bucket names must be globally unique.
-- AWS S3 static website endpoints serve over HTTP. For HTTPS or a custom domain, use CloudFront in front of the bucket (steps below).
-- Review the security implications of making a bucket public. Consider using CloudFront + Origin Access Identity for more secure setups.
+- Bucket names must be globally unique. The Terraform module uses a unique suffix.
+- S3 static website endpoints serve over HTTP. For HTTPS or a custom domain, use CloudFront in front of the bucket.
+- A public bucket is intentionally less secure than private S3 + CloudFront. If you want that model later, we can switch.
 
-1) Configure AWS CLI (if not already):
+### 1) Bootstrap Terraform state (recommended)
 
-```bash
-aws configure
-# Enter AWS Access Key ID, Secret Access Key, default region (e.g. us-east-1), and output format
-```
-
-2) Create the S3 bucket (replace with your unique name and chosen region):
+Terraform needs remote state for team-safe operations. Use the bootstrap Terraform in `infra/bootstrap/` to create the state bucket + lock table, then use `infra/backend.hcl` to point Terraform at it.
 
 ```bash
-BUCKET=my-unique-bucket-name
-aws s3 mb s3://$BUCKET --region us-east-1
+cd infra/bootstrap
+cp terraform.tfvars.example terraform.tfvars
+# edit terraform.tfvars with your unique state bucket name
+terraform init
+terraform apply
+
+cd ..
+cp backend.hcl.example backend.hcl
+# edit backend.hcl with the bucket/table names from bootstrap outputs
 ```
 
-3) (Optional but likely necessary) Allow public access for the bucket by disabling the account-level/public block for this bucket:
+### 2) Configure Terraform variables
 
 ```bash
-aws s3api put-public-access-block --bucket $BUCKET \
-	--public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false
+cp infra/terraform.tfvars.example infra/terraform.tfvars
+# update infra/terraform.tfvars with:
+# - stack_name
+# - github_repo_full_name (owner/repo)
 ```
 
-4) Add a bucket policy so objects are publicly readable (create `bucket-policy.json`):
-
-bucket-policy.json:
-
-```json
-{
-	"Version": "2012-10-17",
-	"Statement": [
-		{
-			"Sid": "PublicReadGetObject",
-			"Effect": "Allow",
-			"Principal": "*",
-			"Action": "s3:GetObject",
-			"Resource": "arn:aws:s3:::YOUR_BUCKET_NAME/*"
-		}
-	]
-}
-```
-
-Replace YOUR_BUCKET_NAME with your bucket name, then apply:
+### 3) Provision infrastructure
 
 ```bash
-sed "s/YOUR_BUCKET_NAME/$BUCKET/" bucket-policy.json > /tmp/policy.json
-aws s3api put-bucket-policy --bucket $BUCKET --policy file:///tmp/policy.json
+cd infra
+terraform init -backend-config=backend.hcl
+terraform plan
+terraform apply
 ```
 
-5) Enable static website hosting (set index and error documents):
+Terraform outputs the S3 bucket name, website endpoint, and GitHub Actions role ARNs (deploy + Terraform).
+
+### 4) Configure GitHub Actions variables
+
+Add these repository variables (Settings → Secrets and variables → Actions → Variables):
+- `AWS_ROLE_ARN` = Terraform output `github_actions_role_arn`
+- `S3_BUCKET` = Terraform output `site_bucket_name`
+- `AWS_REGION` = `us-east-1`
+- `AWS_TERRAFORM_ROLE_ARN` = Terraform output `github_terraform_role_arn`
+- `TF_STATE_BUCKET` = Terraform state bucket name (from bootstrap output)
+- `TF_STATE_KEY` = Terraform state key (e.g., `static-site/terraform.tfstate`)
+- `TF_STATE_DDB_TABLE` = Terraform lock table name (from bootstrap output)
+- `STACK_NAME` = the same `stack_name` value you use in Terraform
+- `REPO_FULL_NAME` = `owner/repo` (same as Terraform variable)
+
+After `terraform apply`, you can print the values with:
 
 ```bash
-aws s3 website s3://$BUCKET --index-document index.html --error-document index.html
-# To verify the website configuration:
-aws s3api get-bucket-website --bucket $BUCKET
+./scripts/print-github-vars.sh
 ```
 
-6) Upload the site files (from repo root). Use `--acl public-read` so objects are readable via HTTP:
+### 5) Deploy
 
-```bash
-aws s3 sync . s3://$BUCKET --exclude ".git/*" --acl public-read
-```
+Push to `main` and GitHub Actions will sync the site to S3.
 
-7) Find your public URL
-- Static website endpoint format (example):
-	- http://$BUCKET.s3-website-us-east-1.amazonaws.com
-- You can get the endpoint programmatically by checking the website configuration or visiting the S3 console.
+### Terraform CI/CD behavior
 
-Optional: Use CloudFront for HTTPS and custom domain
-- Create a CloudFront distribution with the S3 Website Endpoint (or the S3 REST origin with Origin Access Identity). Configure an ACM certificate for your custom domain to enable HTTPS.
-- After deployment you may need to invalidate the CloudFront cache when you push updates:
+- Pull requests run `terraform fmt`, `validate`, and `plan`.
+- Pushes to `main` run `terraform apply -auto-approve`.
 
-```bash
-# replace DISTRIBUTION_ID with your CloudFront distribution id
-aws cloudfront create-invalidation --distribution-id DISTRIBUTION_ID --paths "/*"
-```
+Note: the very first `terraform apply` must be run with AWS credentials that can create IAM roles and the GitHub OIDC provider. After that, use the `github_terraform_role_arn` output in CI.
 
-Cleanup / updates
-- To update the site, run the `aws s3 sync` command again. To remove files that no longer exist locally, include `--delete`.
+### Optional: CloudFront for HTTPS/custom domain
 
-Security reminder
-- Making an S3 bucket public exposes its contents to everyone. For public static sites this is common, but if you want private storage with a public front (recommended), use CloudFront with Origin Access Identity and keep the bucket private.
-
-Alternative deployment options (easier)
-- GitHub Pages, Netlify, or Vercel can host static sites with HTTPS and CI/CD and typically require fewer manual steps.
-
-
+Add a CloudFront distribution in front of the S3 website endpoint and update DNS. (Not included in this Terraform yet.)
