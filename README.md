@@ -86,6 +86,10 @@ Terraform outputs the S3 bucket name, website endpoint, and GitHub Actions role 
 
 ### 4) Configure GitHub Actions variables
 
+Prerequisites:
+- You must have admin (or maintain) access to the GitHub repository.
+- Create **repository-level** variables (not environment-level variables). These workflows read from `vars.*`, so the values must be set in **Settings → Secrets and variables → Actions → Variables** at the repo scope.
+
 Add these repository variables (Settings → Secrets and variables → Actions → Variables):
 - `AWS_ROLE_ARN` = Terraform output `github_actions_role_arn`
 - `S3_BUCKET` = Terraform output `site_bucket_name`
@@ -107,10 +111,19 @@ After `terraform apply`, you can print the values with:
 
 Push to `main` and GitHub Actions will sync the site to S3.
 
-### Terraform CI/CD behavior
+### CI/CD behavior and expectations
 
-- Pull requests run `terraform fmt`, `validate`, and `plan`.
-- Pushes to `main` run `terraform apply -auto-approve`.
+Static site deployment (`.github/workflows/deploy.yml`):
+
+- Triggered on any push to `main` (no path filters).
+- Can also be triggered manually via `workflow_dispatch`.
+- Syncs the repository contents to S3, excluding `.git/`, `.github/`, and `infra/`.
+
+Terraform (`.github/workflows/terraform.yml`):
+
+- Pull requests run `terraform fmt`, `validate`, and `plan` when changes touch `infra/**` or the workflow file.
+- Pushes to `main` run `terraform apply -auto-approve` when changes touch `infra/**` or the workflow file.
+- Can also be triggered manually via `workflow_dispatch`.
 
 Note: the very first `terraform apply` must be run with AWS credentials that can create IAM roles and the GitHub OIDC provider. After that, use the `github_terraform_role_arn` output in CI.
 
