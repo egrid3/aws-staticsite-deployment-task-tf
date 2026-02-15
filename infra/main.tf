@@ -8,20 +8,20 @@ resource "random_id" "bucket_suffix" {
   byte_length = 4
 }
 
-resource "aws_s3_bucket" "site" {
+resource "aws_s3_bucket" "staticsite" {
   bucket = "${local.stack_name}-${random_id.bucket_suffix.hex}"
 }
 
-resource "aws_s3_bucket_ownership_controls" "site" {
-  bucket = aws_s3_bucket.site.id
+resource "aws_s3_bucket_ownership_controls" "staticsite" {
+  bucket = aws_s3_bucket.staticsite.id
 
   rule {
     object_ownership = "BucketOwnerPreferred"
   }
 }
 
-resource "aws_s3_bucket_public_access_block" "site" {
-  bucket = aws_s3_bucket.site.id
+resource "aws_s3_bucket_public_access_block" "staticsite" {
+  bucket = aws_s3_bucket.staticsite.id
 
   block_public_acls       = false
   block_public_policy     = false
@@ -29,8 +29,8 @@ resource "aws_s3_bucket_public_access_block" "site" {
   restrict_public_buckets = false
 }
 
-resource "aws_s3_bucket_website_configuration" "site" {
-  bucket = aws_s3_bucket.site.id
+resource "aws_s3_bucket_website_configuration" "staticsite" {
+  bucket = aws_s3_bucket.staticsite.id
 
   index_document {
     suffix = var.index_document
@@ -42,7 +42,7 @@ resource "aws_s3_bucket_website_configuration" "site" {
 }
 
 resource "aws_s3_bucket_policy" "public_read" {
-  bucket = aws_s3_bucket.site.id
+  bucket = aws_s3_bucket.staticsite.id
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -52,24 +52,24 @@ resource "aws_s3_bucket_policy" "public_read" {
         Effect    = "Allow"
         Principal = "*"
         Action    = ["s3:GetObject"]
-        Resource  = "${aws_s3_bucket.site.arn}/*"
+        Resource  = "${aws_s3_bucket.staticsite.arn}/*"
       }
     ]
   })
 
-  depends_on = [aws_s3_bucket_public_access_block.site]
+  depends_on = [aws_s3_bucket_public_access_block.staticsite]
 }
 
-resource "aws_s3_bucket_versioning" "site" {
-  bucket = aws_s3_bucket.site.id
+resource "aws_s3_bucket_versioning" "staticsite" {
+  bucket = aws_s3_bucket.staticsite.id
 
   versioning_configuration {
     status = "Enabled"
   }
 }
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
-  bucket = aws_s3_bucket.site.id
+resource "aws_s3_bucket_server_side_encryption_configuration" "staticsite" {
+  bucket = aws_s3_bucket.staticsite.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -78,8 +78,8 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "site" {
   }
 }
 
-resource "aws_s3_bucket_lifecycle_configuration" "site" {
-  bucket = aws_s3_bucket.site.id
+resource "aws_s3_bucket_lifecycle_configuration" "staticsite" {
+  bucket = aws_s3_bucket.staticsite.id
 
   rule {
     id     = "noncurrent-cleanup"
@@ -221,7 +221,7 @@ resource "aws_iam_policy" "github_terraform" {
           "s3:PutBucketLifecycleConfiguration"
         ]
         Resource = [
-          aws_s3_bucket.site.arn
+          aws_s3_bucket.staticsite.arn
         ]
       },
       {
@@ -281,7 +281,7 @@ resource "aws_iam_policy" "github_actions_deploy" {
         Effect = "Allow"
         Action = ["s3:ListBucket"]
         Resource = [
-          aws_s3_bucket.site.arn
+          aws_s3_bucket.staticsite.arn
         ]
       },
       {
@@ -296,7 +296,7 @@ resource "aws_iam_policy" "github_actions_deploy" {
           "s3:ListMultipartUploadParts"
         ]
         Resource = [
-          "${aws_s3_bucket.site.arn}/*"
+          "${aws_s3_bucket.staticsite.arn}/*"
         ]
       }
     ]

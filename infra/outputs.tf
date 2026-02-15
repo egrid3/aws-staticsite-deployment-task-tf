@@ -1,11 +1,11 @@
-output "site_bucket_name" {
+output "staticsite_bucket_name" {
   description = "Name of the S3 bucket hosting the site."
-  value       = aws_s3_bucket.site.bucket
+  value       = aws_s3_bucket.staticsite.bucket
 }
 
-output "site_bucket_website_endpoint" {
+output "staticsite_bucket_website_endpoint" {
   description = "S3 website endpoint for the site."
-  value       = aws_s3_bucket_website_configuration.site.website_endpoint
+  value       = aws_s3_bucket_website_configuration.staticsite.website_endpoint
 }
 
 output "github_actions_role_arn" {
