@@ -18,7 +18,7 @@ variable "index_document" {
 variable "error_document" {
   description = "Error document for S3 static website hosting."
   type        = string
-  default     = "index.html"
+  default     = "404.html"
 }
 
 variable "github_repo_full_name" {

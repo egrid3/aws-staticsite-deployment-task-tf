@@ -33,7 +33,7 @@ AWS_ROLE_ARN=${actions_role_value}
 AWS_TERRAFORM_ROLE_ARN=${terraform_role_value}
 TF_STATE_BUCKET=staticsite-tf-state-bucket
 TF_STATE_DDB_TABLE=terraform-locks
-TF_STATE_KEY=static-site/terraform.tfstate
+TF_STATE_KEY=myaws-staticsite/terraform.tfstate
 STACK_NAME=myaws-staticsite
 REPO_FULL_NAME=egrid3/aws-staticsite-deployment-task-tf
 EOF
